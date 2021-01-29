@@ -31,6 +31,9 @@
             .result-heading, .result-desc {
                 padding-right: 1em;
             }
+            input, button {
+                font-size: 2em;
+            }
         </style>
     </head>
     <body>
@@ -45,6 +48,7 @@
                 let outputStr = `<br /><hr /><br /><h1>${pgtitle}</h1>`;
 
                 for (var i = 0; i < quizResults.length; i++) {
+                    if ((!(quizResults[i].header)) && (!(quizResults[i].description))) continue;
                     let hasImage = ('image' in quizResults[i]) && (quizResults[i].image.length > 0);
                     outputStr += `<div class="result"><div class="left"${hasImage?'':' style="width: 100%"'}>`;
                     outputStr += `<h2 class="result-heading">${quizResults[i].header}</h2>`;
@@ -52,6 +56,7 @@
                     outputStr += '</div><div class="right">';
                     if (hasImage) {
                         outputStr += `<a target="_blank" href="${quizResults[i].data_src}"><img src="${quizResults[i].image}" `;
+                        outputStr += `alt="${quizResults[i].alt_text}" `;
                         if ((quizResults[i].image_height) && (quizResults[i].image_width)) {
                             outputStr += `height="${quizResults[i].image_height}" width="${quizResults[i].image_width}"`;
                         }
@@ -71,18 +76,6 @@
                     document.getElementById('msgs').innerHTML = 'Fetched page. Parsing now!';
                 }
 
-                /* search for starting piece */
-                let start_idx = body.indexOf('<script type="text\/x-config">');
-                if (start_idx < 0) {
-                    document.getElementById('msgs').innerHTML = 'Failed to find the magic start value indicating a buzzfeed quiz. Are you sure this is a quiz page?';
-                    return;
-                }
-                let end_idx = body.indexOf('<\/script>', start_idx);
-                if (end_idx < 0) {
-                    document.getElementById('msgs').innerHTML = 'Failed to find the magic end value indicating a buzzfeed quiz. Are you sure this is a quiz page?';
-                    return;
-                }
-
                 /* also, get the page title */
                 let pgtitle_start_idx = body.indexOf('<title>');
                 let pgtitle_end_idx = body.indexOf('</title>');
@@ -93,46 +86,76 @@
                     pgtitle = body.substring(pgtitle_start_idx + 7, pgtitle_end_idx);
                 }
 
-                /* get the config inside */
-                let config = body.substring(start_idx, start_idx + end_idx);
-                /* yeah that's right i parse html with regex */
-                let re = /<script type="text\/x-config">\s+([^]*)<\/script>\s+/g;
-                let results = re.exec(config);
-                if (results == null) {
-                    document.getElementById('msgs').innerHTML = 'Failed to find the quiz config in the page. Buzzfeed may have updated its format, and this tool no longer works.';
-                    return;
-                } else {
-                    try {
-                        let quizCfg = JSON.parse(results[1]);
-                        if ('subbuzz' in quizCfg) {
-                            return alternate_parse(quizCfg, pgtitle);
-                        }
-                        let quizResults = quizCfg['data']['content']['results'];
-                        let outputStr = `<br /><hr /><br /><h1>${pgtitle}</h1>`;
-
-                        for (var i = 0; i < quizResults.length; i++) {
-                            outputStr += '<div class="result"><div class="left">';
-                            outputStr += `<h2 class="result-heading">${quizResults[i].title}</h2>`;
-                            outputStr += `<p class="result-desc">${quizResults[i].description}</p>`;
-                            outputStr += '</div><div class="right">';
-                            if ('image' in quizResults[i]) {
-                                outputStr += `<a target="_blank" href="${quizResults[i].image.creditURL}"><img src="${quizResults[i].image.src}" `;
-                                if ('meta' in quizResults[i].image) {
-                                    outputStr += `height="${quizResults[i].image.meta.height}" width="${quizResults[i].image.meta.width}"`;
-                                }
-                                outputStr += '/></a>';
-                            }
-                            outputStr += '</div></div>';
-                        }
-                        
-                        document.getElementById('results').innerHTML = outputStr;
-                    } catch (e) {
-                        console.error(e);
-                        document.getElementById('msgs').innerHTML = 'Failed to parse the quiz config. This quiz may be an unsupported type that does not show results, or Buzzfeed may have updated its format, causing this tool to no longer work.';
+                /* search for starting piece */
+                let base_idx = 0;
+                while (true) {
+                    let start_idx = body.indexOf('<script type="text\/x-config">', base_idx);
+                    if (start_idx < 0) {
+                        document.getElementById('msgs').innerHTML = 'Failed to find the magic start value indicating a buzzfeed quiz. Are you sure this is a quiz page?';
                         return;
                     }
+                    let end_idx = body.indexOf('<\/script>', start_idx);
+                    if (end_idx < 0) {
+                        document.getElementById('msgs').innerHTML = 'Failed to find the magic end value indicating a buzzfeed quiz. Are you sure this is a quiz page?';
+                        return;
+                    }
+
+                    /* get the config inside */
+                    let config = body.substring(start_idx, end_idx);
+                    /* yeah that's right i parse html with regex */
+                    let re = /<script type="text\/x-config">\s+([^]*)/g;
+                    let results = re.exec(config);
+                    if (results == null) {
+                        document.getElementById('msgs').innerHTML = 'Failed to find the quiz config in the page. Buzzfeed may have updated its format, and this tool no longer works.';
+                        return;
+                    } else {
+                        try {
+                            let quizCfg = JSON.parse(results[1]);
+                            if ('subbuzz' in quizCfg) {
+                                return alternate_parse(quizCfg, pgtitle);
+                            } else if ('id' in quizCfg) {
+                                /* this page has two x-config's and this one is the wrong one; try to find the next one */
+                                base_idx = end_idx;
+                                continue;
+                            }
+                            let quizResults = quizCfg['data'];
+                            if ('content' in quizResults) {
+                                /* sometimes there is a data -> content -> results, other times it is just data -> results. */
+                                quizResults = quizResults['content'];
+                            }
+                            quizResults = quizResults['results'];
+                            let outputStr = `<br /><hr /><br /><h1>${pgtitle}</h1>`;
+                            console.log(quizResults);
+
+                            /* sometimes the results are an array, other times they are an object. this covers both */
+                            for (var key in quizResults) {
+                                let quizResult = quizResults[key];
+                                /* if there is no image, display text full width */
+                                let hasImage = ('image' in quizResult) && (Object.keys(quizResult.image).length > 0);
+
+                                outputStr += `<div class="result"><div class="left"${hasImage?'':' style="width: 100%"'}>`;
+                                outputStr += `<h2 class="result-heading">${quizResult.title}</h2>`;
+                                outputStr += `<p class="result-desc">${quizResult.description}</p>`;
+                                outputStr += '</div><div class="right">';
+                                if (hasImage) {
+                                    outputStr += `<a target="_blank" href="${quizResult.image.creditURL?quizResult.image.creditURL:quizResult.image.src}"><img src="${quizResult.image.src}" `;
+                                    outputStr += `alt="${quizResult.image.alt}" `;
+                                    if ('meta' in quizResult.image) {
+                                        outputStr += `height="${quizResult.image.meta.height}" width="${quizResult.image.meta.width}"`;
+                                    }
+                                    outputStr += '/></a>';
+                                }
+                                outputStr += '</div></div>';
+                            }
+                            document.getElementById('results').innerHTML = outputStr;
+                        } catch (e) {
+                            console.error(e);
+                            document.getElementById('msgs').innerHTML = 'Failed to parse the quiz config. This quiz may be an unsupported type that does not show results, or Buzzfeed may have updated its format, causing this tool to no longer work.';
+                            return;
+                        }
+                    }
+                    return;
                 }
-                
             }
             /* global fetch */
             function proxy(url, callback) {
