@@ -15,15 +15,6 @@
             .result:last-child {
                 margin-bottom: 2em;
             }
-            .left {
-                float: left;
-                width: 50%;
-            }
-            .right {
-                float: right;
-                width: 50%;
-                text-align: right;
-            }
             img {
                 max-width: 100%;
                 height: auto;
@@ -34,10 +25,36 @@
             input, button {
                 font-size: 2em;
             }
+            h2 {
+                margin-top: 0;
+            }
+            @media screen and (min-width: 650px) {
+                .left {
+                    float: left;
+                    width: 50%;
+                }
+                .right {
+                    float: right;
+                    width: 50%;
+                    text-align: right;
+                }
+            }
         </style>
     </head>
     <body>
         <h1>Buzzfeed quiz all results fetcher</h1>
+        <div>
+            <p>Do you spend a lot of time doing Buzzfeed quizzes?</p>
+            <p>
+                Do you ever wonder what the other possible results are,
+                but don't want to spend forever trying out all the possible combinations?
+            </p>
+            <p>
+                If yes, look no further! This Buzzfeed quiz all results fetcher will tell you
+                all of the possible results for. Note that this doesn't work with those poll
+                type quizzes where you answer and it tells you what % of people agree with you.
+            </p>
+        </div>
         <div id="msgs"><b>Instructions</b>: Paste link to Buzzfeed quiz above, then click button</div>
         <input id="bfquiz" placeholder="Paste link to Buzzfeed quiz here">
         <button id="bfgo">Click me!</button>
@@ -52,7 +69,7 @@
                     let hasImage = ('image' in quizResults[i]) && (quizResults[i].image.length > 0);
                     outputStr += `<div class="result"><div class="left"${hasImage?'':' style="width: 100%"'}>`;
                     outputStr += `<h2 class="result-heading">${quizResults[i].header}</h2>`;
-                    outputStr += `<p class="result-desc">${quizResults[i].description}</p>`;
+                    if (quizResults[i].description) outputStr += `<p class="result-desc">${quizResults[i].description}</p>`;
                     outputStr += '</div><div class="right">';
                     if (hasImage) {
                         outputStr += `<a target="_blank" href="${quizResults[i].data_src}"><img src="${quizResults[i].image}" `;
@@ -135,7 +152,7 @@
 
                                 outputStr += `<div class="result"><div class="left"${hasImage?'':' style="width: 100%"'}>`;
                                 outputStr += `<h2 class="result-heading">${quizResult.title}</h2>`;
-                                outputStr += `<p class="result-desc">${quizResult.description}</p>`;
+                                if (quizResult.description) outputStr += `<p class="result-desc">${quizResult.description}</p>`;
                                 outputStr += '</div><div class="right">';
                                 if (hasImage) {
                                     outputStr += `<a target="_blank" href="${quizResult.image.creditURL?quizResult.image.creditURL:quizResult.image.src}"><img src="${quizResult.image.src}" `;
