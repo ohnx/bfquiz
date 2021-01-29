@@ -6,6 +6,8 @@ app = Flask(__name__, static_url_path='')
 
 MAGIC_START = '<script type="text/x-config">'
 
+cache = {}
+
 @app.route('/bfproxy', methods=['GET', 'POST'])
 def bfproxy():
     param = request.form.get('url')
@@ -14,7 +16,18 @@ def bfproxy():
 
     if param is not None and param.startswith('https://www.buzzfeed.com/'):
         # send http request
+        if param in cache:
+            return jsonify({
+                "code": 920,
+                "msg": cache[param]
+            }), 200
+
         r = requests.get(param)
+
+        if r.status_code == 200:
+            # this is a really dumb cache
+            cache[param] = r.text
+
         return jsonify({
             "code": r.status_code,
             "msg": r.text

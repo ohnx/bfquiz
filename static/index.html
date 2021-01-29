@@ -12,6 +12,9 @@
                 margin-top: 1em;
                 clear: both;
             }
+            .result:last-child {
+                margin-bottom: 2em;
+            }
             .left {
                 float: left;
                 width: 50%;
@@ -37,6 +40,28 @@
         <button id="bfgo">Click me!</button>
         <div id="results"></div>
         <script>
+            function alternate_parse(quizCfg, pgtitle) {
+                let quizResults = quizCfg['subbuzz']['results'];
+                let outputStr = `<br /><hr /><br /><h1>${pgtitle}</h1>`;
+
+                for (var i = 0; i < quizResults.length; i++) {
+                    let hasImage = ('image' in quizResults[i]) && (quizResults[i].image.length > 0);
+                    outputStr += `<div class="result"><div class="left"${hasImage?'':' style="width: 100%"'}>`;
+                    outputStr += `<h2 class="result-heading">${quizResults[i].header}</h2>`;
+                    outputStr += `<p class="result-desc">${quizResults[i].description}</p>`;
+                    outputStr += '</div><div class="right">';
+                    if (hasImage) {
+                        outputStr += `<a target="_blank" href="${quizResults[i].data_src}"><img src="${quizResults[i].image}" `;
+                        if ((quizResults[i].image_height) && (quizResults[i].image_width)) {
+                            outputStr += `height="${quizResults[i].image_height}" width="${quizResults[i].image_width}"`;
+                        }
+                        outputStr += '/></a>';
+                    }
+                    outputStr += '</div></div>';
+                }
+
+                document.getElementById('results').innerHTML = outputStr;
+            }
             function parse_bf_quiz(body, error) {
                 document.getElementById('results').innerHTML = '';
                 if (error) {
@@ -47,13 +72,13 @@
                 }
 
                 /* search for starting piece */
-                let start_idx = body.indexOf('<script type="text/x-config">');
+                let start_idx = body.indexOf('<script type="text\/x-config">');
                 if (start_idx < 0) {
                     document.getElementById('msgs').innerHTML = 'Failed to find the magic start value indicating a buzzfeed quiz. Are you sure this is a quiz page?';
                     return;
                 }
-                let end_idx = body.indexOf('<!-- bfp_instant_quiz -->');
-                if (start_idx > end_idx) {
+                let end_idx = body.indexOf('<\/script>', start_idx);
+                if (end_idx < 0) {
                     document.getElementById('msgs').innerHTML = 'Failed to find the magic end value indicating a buzzfeed quiz. Are you sure this is a quiz page?';
                     return;
                 }
@@ -69,7 +94,7 @@
                 }
 
                 /* get the config inside */
-                let config = body.substring(start_idx, end_idx);
+                let config = body.substring(start_idx, start_idx + end_idx);
                 /* yeah that's right i parse html with regex */
                 let re = /<script type="text\/x-config">\s+([^]*)<\/script>\s+/g;
                 let results = re.exec(config);
@@ -79,6 +104,9 @@
                 } else {
                     try {
                         let quizCfg = JSON.parse(results[1]);
+                        if ('subbuzz' in quizCfg) {
+                            return alternate_parse(quizCfg, pgtitle);
+                        }
                         let quizResults = quizCfg['data']['content']['results'];
                         let outputStr = `<br /><hr /><br /><h1>${pgtitle}</h1>`;
 
@@ -100,7 +128,7 @@
                         document.getElementById('results').innerHTML = outputStr;
                     } catch (e) {
                         console.error(e);
-                        document.getElementById('msgs').innerHTML = 'Failed to parse the quiz config. Buzzfeed may have updated its format, and this tool no longer works.';
+                        document.getElementById('msgs').innerHTML = 'Failed to parse the quiz config. This quiz may be an unsupported type that does not show results, or Buzzfeed may have updated its format, causing this tool to no longer work.';
                         return;
                     }
                 }
