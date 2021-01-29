@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Buzzfeed quiz all results fetcher</title>
+        <style type="text/css">body{margin:40px auto;max-width:650px;line-height:1.6;font-size:18px;padding:0 10px;font-family:'Georgia';}h1,h2,h3{line-height:1.2}</style>
+        <style>
+            .result {
+                float: left;
+                width: 100%;
+                margin-top: 1em;
+                clear: both;
+            }
+            .left {
+                float: left;
+                width: 50%;
+            }
+            .right {
+                float: right;
+                width: 50%;
+                text-align: right;
+            }
+            img {
+                max-width: 100%;
+                height: auto;
+            }
+            .result-heading, .result-desc {
+                padding-right: 1em;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>Buzzfeed quiz all results fetcher</h1>
+        <div id="msgs"><b>Instructions</b>: Paste link to Buzzfeed quiz above, then click button</div>
+        <input id="bfquiz" placeholder="Paste link to Buzzfeed quiz here">
+        <button id="bfgo">Click me!</button>
+        <div id="results"></div>
+        <script>
+            function parse_bf_quiz(body, error) {
+                document.getElementById('results').innerHTML = '';
+                if (error) {
+                    document.getElementById('msgs').innerHTML = 'Error fetching the page. Are you sure this is a Buzzfeed link?';
+                    return;
+                } else {
+                    document.getElementById('msgs').innerHTML = 'Fetched page. Parsing now!';
+                }
+
+                /* search for starting piece */
+                let start_idx = body.indexOf('<script type="text/x-config">');
+                if (start_idx < 0) {
+                    document.getElementById('msgs').innerHTML = 'Failed to find the magic start value indicating a buzzfeed quiz. Are you sure this is a quiz page?';
+                    return;
+                }
+                let end_idx = body.indexOf('<!-- bfp_instant_quiz -->');
+                if (start_idx > end_idx) {
+                    document.getElementById('msgs').innerHTML = 'Failed to find the magic end value indicating a buzzfeed quiz. Are you sure this is a quiz page?';
+                    return;
+                }
+
+                /* also, get the page title */
+                let pgtitle_start_idx = body.indexOf('<title>');
+                let pgtitle_end_idx = body.indexOf('</title>');
+                let pgtitle;
+                if ((pgtitle_start_idx < 0) || (pgtitle_start_idx > pgtitle_end_idx) || ((pgtitle_start_idx + 7) > pgtitle_end_idx)) {
+                    pgtitle = 'Unknown Quiz Title';
+                } else {
+                    pgtitle = body.substring(pgtitle_start_idx + 7, pgtitle_end_idx);
+                }
+
+                /* get the config inside */
+                let config = body.substring(start_idx, end_idx);
+                /* yeah that's right i parse html with regex */
+                let re = /<script type="text\/x-config">\s+([^]*)<\/script>\s+/g;
+                let results = re.exec(config);
+                if (results == null) {
+                    document.getElementById('msgs').innerHTML = 'Failed to find the quiz config in the page. Buzzfeed may have updated its format, and this tool no longer works.';
+                    return;
+                } else {
+                    try {
+                        let quizCfg = JSON.parse(results[1]);
+                        let quizResults = quizCfg['data']['content']['results'];
+                        let outputStr = `<br /><hr /><br /><h1>${pgtitle}</h1>`;
+
+                        for (var i = 0; i < quizResults.length; i++) {
+                            outputStr += '<div class="result"><div class="left">';
+                            outputStr += `<h2 class="result-heading">${quizResults[i].title}</h2>`;
+                            outputStr += `<p class="result-desc">${quizResults[i].description}</p>`;
+                            outputStr += '</div><div class="right">';
+                            if ('image' in quizResults[i]) {
+                                outputStr += `<a target="_blank" href="${quizResults[i].image.creditURL}"><img src="${quizResults[i].image.src}" `;
+                                if ('meta' in quizResults[i].image) {
+                                    outputStr += `height="${quizResults[i].image.meta.height}" width="${quizResults[i].image.meta.width}"`;
+                                }
+                                outputStr += '/></a>';
+                            }
+                            outputStr += '</div></div>';
+                        }
+                        
+                        document.getElementById('results').innerHTML = outputStr;
+                    } catch (e) {
+                        console.error(e);
+                        document.getElementById('msgs').innerHTML = 'Failed to parse the quiz config. Buzzfeed may have updated its format, and this tool no longer works.';
+                        return;
+                    }
+                }
+                
+            }
+            /* global fetch */
+            function proxy(url, callback) {
+                fetch('/bfproxy', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/x-www-form-urlencoded'
+                    },
+                    body: `url=${encodeURIComponent(url)}`
+                })
+                .then((response) => {
+                    if (response.ok) {
+                        return response.json();
+                    } else {
+                        throw new Error(response.statusText);
+                    }
+                })
+                .then(data => {
+                    console.log('Success:', data);
+                    if (callback) callback(data.msg);
+                })
+                .catch((error) => {
+                    console.error('Error:', error);
+                    if (callback) callback(null, error);
+                });
+            }
+            function makereq() {
+                let bfurl = document.getElementById('bfquiz').value;
+                if (bfurl.indexOf('http://') == 0) {
+                    /* does anyone still use https?! */
+                    bfurl = bfurl.replace('http://', 'https://');
+                }
+                proxy(bfurl, parse_bf_quiz);
+            }
+            (function () {
+                document.getElementById('bfgo').addEventListener('click', function(e) {
+                    makereq();
+                });
+                document.getElementById('bfquiz').addEventListener('keyup', function(event) {
+                    if (event.key === 'Enter') {
+                        makereq();
+                    }
+                });
+            })();
+        </script>
+    </body>
+</html>
