@@ -4,8 +4,6 @@ import requests
 
 app = Flask(__name__, static_url_path='')
 
-MAGIC_START = '<script type="text/x-config">'
-
 cache = {}
 
 @app.route('/bfproxy', methods=['GET', 'POST'])
