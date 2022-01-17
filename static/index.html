@@ -177,8 +177,8 @@
                             let quizCfg = JSON.parse(results[1]);
                             if ('subbuzz' in quizCfg) {
                                 return alternate_parse(quizCfg, pgtitle);
-                            } else if ('id' in quizCfg) {
-                                /* this page has two x-config's and this one is the wrong one; try to find the next one */
+                            } else if (!('data' in quizCfg)) {
+                                /* this page has multiple x-config's and this one is the wrong one; try to find the next one */
                                 base_idx = end_idx;
                                 continue;
                             }
@@ -196,7 +196,7 @@
                             /* wrap all this code in a second try-catch because it's super beta code */
                             try {
                                 /* check that some values exist */
-                                if (!quizQuestions[0].answers[0].resultId) throw "sad";
+                                if (!quizQuestions[0].answers[0].resultId) throw "sad v1";
                                 for (var key in quizResults) {
                                     how_to_get_results[quizResults[key].pid] = new Array(quizQuestions.length).fill(null);
                                 }
@@ -215,15 +215,40 @@
                             } catch (e2) {
                                 console.error(e2);
                             }
-
+                            let how_to_get_results_v2 = {};
+                            /* wrap all this code in a second try-catch because it's super beta code */
+                            try {
+                                /* check that some values exist */
+                                if (!quizQuestions[0].answers[0].result_ids) throw "sad v2";
+                                for (var key in quizResults) {
+                                    how_to_get_results_v2[quizResults[key].id] = new Array(quizQuestions.length).fill(null);
+                                }
+                                for (i = 0; i < quizQuestions.length; i++) {
+                                    for (j = 0; j < quizQuestions[i].answers.length; j++) {
+                                        for (k = 0; k < quizQuestions[i].answers[j].result_ids.length; k++) {
+                                            let msg = quizQuestions[i].answers[j].text;
+                                            if (!msg) msg = `answer #${(j+1)}`;
+                                            else msg = `"${msg}"`;
+                                            if (how_to_get_results_v2[quizQuestions[i].answers[j].result_ids[k]][i]) {
+                                                how_to_get_results_v2[quizQuestions[i].answers[j].result_ids[k]][i].push(msg);
+                                            } else {
+                                                how_to_get_results_v2[quizQuestions[i].answers[j].result_ids[k]][i] = [msg];
+                                            }
+                                        }
+                                    }
+                                }
+                            } catch (e3) {
+                                console.error(e3);
+                            }
 
                             /* sometimes the results are an array, other times they are an object. this covers both */
                             for (var key in quizResults) {
                                 let quizResult = quizResults[key];
                                 /* if there is no image, display text full width */
                                 let hasImage = ('image' in quizResult) && (Object.keys(quizResult.image).length > 0);
+                                let hasMediaImage = ('media' in quizResult) && (quizResult.media.type == 'img');
 
-                                outputStr += `<div class="result"><div class="left"${hasImage?'':' style="width: 100%"'}>`;
+                                outputStr += `<div class="result"><div class="left"${(hasImage || hasMediaImage)?'':' style="width: 100%"'}>`;
                                 outputStr += `<h2 class="result-heading">${quizResult.title}</h2>`;
                                 if (quizResult.description) outputStr += `<p class="result-desc">${quizResult.description}</p>`;
                                 if ('pid' in quizResult && how_to_get_results[quizResult.pid]) {
@@ -249,6 +274,26 @@
                                 } else if ('pointsRequired' in quizResult) {
                                     outputStr += `<p class="result-howto"><i>How to get this result:</i> `;
                                     outputStr += `Get at least ${quizResult['pointsRequired']} points on the quiz</p>`;
+                                } else if ('id' in quizResult && how_to_get_results_v2[quizResult.id]) {
+                                    outputStr += `<p class="result-howto"><i>How to get this result:</i><ul>`;
+                                    for (j = 0; j < how_to_get_results_v2[quizResult.id].length; j++) {
+                                        if (!how_to_get_results_v2[quizResult.id][j]) continue;
+                                        outputStr += `<li>Question ${j+1} pick `;
+                                        for (k = 0; k < how_to_get_results_v2[quizResult.id][j].length; k++) {
+                                            outputStr += how_to_get_results_v2[quizResult.id][j][k];
+                                            if (k == how_to_get_results_v2[quizResult.id][j].length - 2) {
+                                                if (how_to_get_results_v2[quizResult.id][j].length == 2) {
+                                                    outputStr += ' or ';
+                                                } else {
+                                                    outputStr += ', or ';
+                                                }
+                                            } else if (k < how_to_get_results_v2[quizResult.id][j].length - 2) {
+                                                outputStr += ', ';
+                                            }
+                                        }
+                                        outputStr += `</li>`;
+                                    }
+                                    outputStr += `</ul></p>`;
                                 }
                                 outputStr += '</div><div class="right">';
                                 if (hasImage) {
@@ -256,6 +301,13 @@
                                     outputStr += `alt="${quizResult.image.alt}" `;
                                     if ('meta' in quizResult.image) {
                                         outputStr += `height="${quizResult.image.meta.height}" width="${quizResult.image.meta.width}"`;
+                                    }
+                                    outputStr += '/></a>';
+                                } else if (hasMediaImage) {
+                                    outputStr += `<a><img src="${quizResult.media.url}" `;
+                                    outputStr += `alt="${quizResult.media.alt_text}" `;
+                                    if ('meta' in quizResult.media) {
+                                        outputStr += `height="${quizResult.media.meta.height}" width="${quizResult.media.meta.width}"`;
                                     }
                                     outputStr += '/></a>';
                                 }
@@ -288,7 +340,6 @@
                     }
                 })
                 .then(data => {
-                    console.log('Success:', data);
                     if (callback) callback(data.msg);
                 })
                 .catch((error) => {
